@@ -1,0 +1,33 @@
+{
+  "name": "pi-local-vault",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Authenticated Local Vault tools for Pi and Oh My Pi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xeTaiz/pi-local-vault.git"
+  },
+  "scripts": {
+    "test": "tsx --test index.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "typebox": "^1.1.24"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.84.0"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "omp": {
+    "extensions": ["./index.ts"]
+  }
+}
