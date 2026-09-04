@@ -62,6 +62,9 @@ test("registers the minimal Pi and OMP tool contract", () => {
   assert.ok(jobStatus);
   assert.equal(jobStatus.loadMode, undefined);
   assert.match(jobStatus.description, /maintenance and debugging only/);
+  const research = tools.get("vault_research");
+  assert.ok(research);
+  assert.ok("idempotencyKey" in (research.parameters.properties ?? {}));
 });
 
 test("sends exact read, get, and update requests", async () => {
@@ -109,6 +112,10 @@ test("sends exact read, get, and update requests", async () => {
       instruction: "durable",
       context: "self-contained evidence",
     });
+    await tools.get("vault_research")?.execute("research", {
+      topic: "Research https://arxiv.org/abs/2601.00001",
+      idempotencyKey: "scholar-inbox.abc123",
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -118,6 +125,7 @@ test("sends exact read, get, and update requests", async () => {
     "http://127.0.0.1:8088/v1/get",
     "http://127.0.0.1:8088/v1/updates",
     "http://127.0.0.1:8088/v1/update",
+    "http://127.0.0.1:8088/v1/research",
   ]);
   assert.deepEqual(requests[0].body, {
     query: "q",
@@ -132,6 +140,13 @@ test("sends exact read, get, and update requests", async () => {
     context: "self-contained evidence",
   });
   assert.deepEqual(requests[3].body, requests[2].body);
+  assert.deepEqual(requests[4].body, {
+    topic: "Research https://arxiv.org/abs/2601.00001",
+  });
+  assert.equal(
+    new Headers(requests[4].init.headers).get("x-idempotency-key"),
+    "scholar-inbox.abc123",
+  );
 
   const firstUpdateHeaders = new Headers(requests[2].init.headers);
   const compatibilityHeaders = new Headers(requests[3].init.headers);

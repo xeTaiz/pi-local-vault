@@ -314,11 +314,27 @@ export default function remoteVault(pi: ExtensionAPI): void {
           maxLength: 32_768,
           description: "A durable research question whose findings are likely to remain useful beyond the current task.",
         }),
+        idempotencyKey: Type.Optional(Type.String({
+          minLength: 1,
+          maxLength: 256,
+          pattern: "^[A-Za-z0-9._:-]+$",
+          description:
+            "Stable caller key for unattended ingestion retries. Omit for ordinary interactive research.",
+        })),
       },
       { additionalProperties: false },
     ),
     async execute(_toolCallId, args, signal) {
-      return toolResult(await request("POST", "/v1/research", args, signal, randomUUID()));
+      const { idempotencyKey, ...payload } = args;
+      return toolResult(
+        await request(
+          "POST",
+          "/v1/research",
+          payload,
+          signal,
+          idempotencyKey ?? randomUUID(),
+        ),
+      );
     },
   });
 }
