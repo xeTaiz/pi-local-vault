@@ -20,8 +20,11 @@ Set:
 
 - `LOCAL_VAULT_URL` — appliance base URL; defaults to `http://127.0.0.1:8088`.
 - `LOCAL_VAULT_TOKEN_FILE` — bearer-token file; defaults to `~/.config/pi/local-vault.token`.
+- `LOCAL_VAULT_TAILNET_DNS_SUFFIX` — optional trusted MagicDNS/Headscale suffix, for example `hs.d0me.xyz`.
 
-The token file must contain only the client bearer token. Plain HTTP is accepted only for loopback or Tailnet IPv4 addresses in `100.64.0.0/10`; other hosts require HTTPS.
+The token file must contain only the client bearer token. Plain HTTP is accepted
+only for loopback, Tailnet IPv4 addresses in `100.64.0.0/10`, or hostnames below
+the explicitly configured Tailnet DNS suffix. Other hosts require HTTPS.
 
 ## Tools
 

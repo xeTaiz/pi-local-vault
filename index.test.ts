@@ -21,6 +21,11 @@ type RegisteredTool = {
   ) => Promise<unknown>;
 };
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
 test("registers the minimal Pi and OMP tool contract", () => {
   const tools = new Map<string, RegisteredTool>();
   localVault({
@@ -134,4 +139,61 @@ test("sends exact read, get, and update requests", async () => {
     firstUpdateHeaders.get("x-idempotency-key"),
     compatibilityHeaders.get("x-idempotency-key"),
   );
+});
+
+test("accepts configured MagicDNS suffix over HTTP", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-local-vault-magicdns-"));
+  const tokenFile = join(directory, "token");
+  await writeFile(tokenFile, "test-token\n", "utf8");
+  const previousUrl = process.env.LOCAL_VAULT_URL;
+  const previousTokenFile = process.env.LOCAL_VAULT_TOKEN_FILE;
+  const previousSuffix = process.env.LOCAL_VAULT_TAILNET_DNS_SUFFIX;
+  const originalFetch = globalThis.fetch;
+  process.env.LOCAL_VAULT_URL = "http://desktop.hs.d0me.xyz:8088";
+  process.env.LOCAL_VAULT_TOKEN_FILE = tokenFile;
+  process.env.LOCAL_VAULT_TAILNET_DNS_SUFFIX = "hs.d0me.xyz";
+  let requestedUrl = "";
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    requestedUrl = String(input);
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const tools = new Map<string, RegisteredTool>();
+    localVault({
+      registerTool(tool: RegisteredTool) {
+        tools.set(tool.name, tool);
+      },
+    } as never);
+    await tools.get("vault_read")?.execute("read", { question: "q" });
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreEnv("LOCAL_VAULT_URL", previousUrl);
+    restoreEnv("LOCAL_VAULT_TOKEN_FILE", previousTokenFile);
+    restoreEnv("LOCAL_VAULT_TAILNET_DNS_SUFFIX", previousSuffix);
+  }
+
+  assert.equal(requestedUrl, "http://desktop.hs.d0me.xyz:8088/v1/read");
+});
+
+test("does not accept a hostname outside the configured MagicDNS suffix", async () => {
+  const previousUrl = process.env.LOCAL_VAULT_URL;
+  const previousSuffix = process.env.LOCAL_VAULT_TAILNET_DNS_SUFFIX;
+  process.env.LOCAL_VAULT_URL = "http://not-hs.d0me.xyz:8088";
+  process.env.LOCAL_VAULT_TAILNET_DNS_SUFFIX = "hs.d0me.xyz";
+
+  try {
+    const tools = new Map<string, RegisteredTool>();
+    localVault({
+      registerTool(tool: RegisteredTool) {
+        tools.set(tool.name, tool);
+      },
+    } as never);
+    const read = tools.get("vault_read");
+    assert.ok(read);
+    await assert.rejects(read.execute("read", { question: "q" }), /must use HTTPS/);
+  } finally {
+    restoreEnv("LOCAL_VAULT_URL", previousUrl);
+    restoreEnv("LOCAL_VAULT_TAILNET_DNS_SUFFIX", previousSuffix);
+  }
 });

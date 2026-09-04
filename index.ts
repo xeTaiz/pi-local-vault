@@ -31,6 +31,24 @@ function isTailnetIpv4(hostname: string): boolean {
   return values.every((value) => value >= 0 && value <= 255) && values[0] === 100 && values[1] >= 64 && values[1] <= 127;
 }
 
+function tailnetDnsSuffix(): string | undefined {
+  const raw = process.env.LOCAL_VAULT_TAILNET_DNS_SUFFIX?.trim();
+  if (!raw) return undefined;
+  const suffix = raw.replace(/^\./, "").replace(/\.$/, "").toLowerCase();
+  if (
+    suffix.length > 253 ||
+    !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(suffix) ||
+    suffix.includes("..")
+  ) {
+    throw new Error("LOCAL_VAULT_TAILNET_DNS_SUFFIX must be a valid DNS suffix");
+  }
+  return suffix;
+}
+
+function isTailnetDnsName(hostname: string, suffix: string | undefined): boolean {
+  return suffix !== undefined && hostname.toLowerCase().endsWith(`.${suffix}`);
+}
+
 function remoteConfig(): { baseUrl: string; tokenFile: string } {
   const configuredUrl = process.env.LOCAL_VAULT_URL ?? "http://127.0.0.1:8088";
   const tokenFile =
@@ -45,14 +63,22 @@ function remoteConfig(): { baseUrl: string; tokenFile: string } {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("LOCAL_VAULT_URL must use HTTP or HTTPS");
   }
-  const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+  const loopbackHosts: Record<string, true> = {
+    "127.0.0.1": true,
+    localhost: true,
+    "::1": true,
+    "[::1]": true,
+  };
+  const dnsSuffix = tailnetDnsSuffix();
   if (
     url.protocol === "http:" &&
-    !loopbackHosts.has(url.hostname) &&
-    !isTailnetIpv4(url.hostname)
+    !loopbackHosts[url.hostname] &&
+    !isTailnetIpv4(url.hostname) &&
+    !isTailnetDnsName(url.hostname, dnsSuffix)
   ) {
     throw new Error(
-      "LOCAL_VAULT_URL must use HTTPS except for loopback or Tailnet IPv4 (100.64.0.0/10)",
+      "LOCAL_VAULT_URL must use HTTPS except for loopback, Tailnet IPv4 " +
+        "(100.64.0.0/10), or a hostname below LOCAL_VAULT_TAILNET_DNS_SUFFIX",
     );
   }
   if (url.username || url.password || url.search || url.hash) {
