@@ -1,6 +1,6 @@
 {
   "name": "pi-local-vault",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Authenticated Local Vault tools for Pi and Oh My Pi",
@@ -25,9 +25,13 @@
     "@earendil-works/pi-coding-agent": ">=0.84.0"
   },
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
   "omp": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   }
 }
