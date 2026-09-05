@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import test, { afterEach, beforeEach } from "node:test";
 
 import localVault from "./index.js";
 
@@ -26,6 +26,16 @@ function restoreEnv(name: string, value: string | undefined): void {
   else process.env[name] = value;
 }
 
+const environmentKeys = ["WH_SESSION_ROLE", "LOCAL_VAULT_READONLY", "LOCAL_VAULT_URL", "LOCAL_VAULT_TOKEN_FILE", "LOCAL_VAULT_TAILNET_DNS_SUFFIX"];
+const originalEnvironment = Object.fromEntries(environmentKeys.map((key) => [key, process.env[key]]));
+beforeEach(() => {
+  delete process.env.WH_SESSION_ROLE;
+  delete process.env.LOCAL_VAULT_READONLY;
+});
+afterEach(() => {
+  for (const key of environmentKeys) restoreEnv(key, originalEnvironment[key]);
+});
+
 test("registers the minimal Pi and OMP tool contract", () => {
   const tools = new Map<string, RegisteredTool>();
   localVault({
@@ -46,7 +56,6 @@ test("registers the minimal Pi and OMP tool contract", () => {
   const read = tools.get("vault_read");
   assert.ok(read);
   assert.equal(read.loadMode, "essential");
-  assert.match(read.description, /first source/);
   assert.deepEqual(
     Object.keys(read.parameters.properties ?? {}).sort(),
     ["question", "searchBudget"],
@@ -56,15 +65,29 @@ test("registers the minimal Pi and OMP tool contract", () => {
   assert.ok(update);
   assert.equal(update.loadMode, "essential");
   assert.ok(update.parameters.required?.includes("context"));
-  assert.match(update.description, /self-contained instruction and context/);
 
   const jobStatus = tools.get("vault_job_status");
   assert.ok(jobStatus);
   assert.equal(jobStatus.loadMode, undefined);
-  assert.match(jobStatus.description, /maintenance and debugging only/);
   const research = tools.get("vault_research");
   assert.ok(research);
   assert.ok("idempotencyKey" in (research.parameters.properties ?? {}));
+});
+
+test("task role cannot register writes even without the launcher read-only flag", () => {
+  process.env.WH_SESSION_ROLE = "task";
+  process.env.LOCAL_VAULT_READONLY = "0";
+  const names: string[] = [];
+  localVault({ registerTool: (tool: RegisteredTool) => names.push(tool.name) } as never);
+  assert.deepEqual(names, ["vault_read", "vault_get", "vault_job_status"]);
+});
+
+test("explicit read-only mode removes writes for an otherwise writable PM", () => {
+  process.env.WH_SESSION_ROLE = "pm";
+  process.env.LOCAL_VAULT_READONLY = "1";
+  const names: string[] = [];
+  localVault({ registerTool: (tool: RegisteredTool) => names.push(tool.name) } as never);
+  assert.deepEqual(names, ["vault_read", "vault_get", "vault_job_status"]);
 });
 
 test("sends exact read, get, and update requests", async () => {

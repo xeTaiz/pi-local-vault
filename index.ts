@@ -281,60 +281,62 @@ export default function remoteVault(pi: ExtensionAPI): void {
     },
   });
 
-  pi.registerTool({
-    name: "vault_update",
-    label: "Update Durable Vault Knowledge",
-    ...essentialToolPresentation,
-    description: "Save or revise durable knowledge in the remote Vault. Use when you identify new durable facts, decisions, discussions, research findings, or major project updates, especially when earlier Vault retrieval omitted relevant information. Supply self-contained instruction and context sufficient for curation without access to your conversation or workspace. Do not use for temporary symptoms, task state, or raw chronology.",
-    parameters: Type.Object(
-      {
-        instruction: Type.String({
-          minLength: 1,
-          maxLength: 65_536,
-          description: "State exactly what durable knowledge should be added, corrected, reconciled, or reorganized and why it matters.",
-        }),
-        context: updateContext,
-        targetPath: optionalUpdateTargetPath,
+  if (process.env.LOCAL_VAULT_READONLY !== "1" && process.env.WH_SESSION_ROLE?.trim() !== "task") {
+    pi.registerTool({
+      name: "vault_update",
+      label: "Update Durable Vault Knowledge",
+      ...essentialToolPresentation,
+      description: "Save or revise durable knowledge in the remote Vault. Use when you identify new durable facts, decisions, discussions, research findings, or major project updates, especially when earlier Vault retrieval omitted relevant information. Supply self-contained instruction and context sufficient for curation without access to your conversation or workspace. Do not use for temporary symptoms, task state, or raw chronology.",
+      parameters: Type.Object(
+        {
+          instruction: Type.String({
+            minLength: 1,
+            maxLength: 65_536,
+            description: "State exactly what durable knowledge should be added, corrected, reconciled, or reorganized and why it matters.",
+          }),
+          context: updateContext,
+          targetPath: optionalUpdateTargetPath,
+        },
+        { additionalProperties: false },
+      ),
+      async execute(_toolCallId, args, signal) {
+        return toolResult(await submitUpdate(args, signal));
       },
-      { additionalProperties: false },
-    ),
-    async execute(_toolCallId, args, signal) {
-      return toolResult(await submitUpdate(args, signal));
-    },
-  });
+    });
 
-  pi.registerTool({
-    name: "vault_research",
-    label: "Research Durable Vault Knowledge",
-    description: "Research and save durable, future-useful knowledge in the remote Vault. Do not use for transient debugging, one-off symptoms, or task logs; keep those in project-local Markdown inside the project's working directory. Returns the asynchronous Vault job identifier/state.",
-    parameters: Type.Object(
-      {
-        topic: Type.String({
-          minLength: 1,
-          maxLength: 32_768,
-          description: "A durable research question whose findings are likely to remain useful beyond the current task.",
-        }),
-        idempotencyKey: Type.Optional(Type.String({
-          minLength: 1,
-          maxLength: 256,
-          pattern: "^[A-Za-z0-9._:-]+$",
-          description:
-            "Stable caller key for unattended ingestion retries. Omit for ordinary interactive research.",
-        })),
+    pi.registerTool({
+      name: "vault_research",
+      label: "Research Durable Vault Knowledge",
+      description: "Research and save durable, future-useful knowledge in the remote Vault. Do not use for transient debugging, one-off symptoms, or task logs; keep those in project-local Markdown inside the project's working directory. Returns the asynchronous Vault job identifier/state.",
+      parameters: Type.Object(
+        {
+          topic: Type.String({
+            minLength: 1,
+            maxLength: 32_768,
+            description: "A durable research question whose findings are likely to remain useful beyond the current task.",
+          }),
+          idempotencyKey: Type.Optional(Type.String({
+            minLength: 1,
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9._:-]+$",
+            description:
+              "Stable caller key for unattended ingestion retries. Omit for ordinary interactive research.",
+          })),
+        },
+        { additionalProperties: false },
+      ),
+      async execute(_toolCallId, args, signal) {
+        const { idempotencyKey, ...payload } = args;
+        return toolResult(
+          await request(
+            "POST",
+            "/v1/research",
+            payload,
+            signal,
+            idempotencyKey ?? randomUUID(),
+          ),
+        );
       },
-      { additionalProperties: false },
-    ),
-    async execute(_toolCallId, args, signal) {
-      const { idempotencyKey, ...payload } = args;
-      return toolResult(
-        await request(
-          "POST",
-          "/v1/research",
-          payload,
-          signal,
-          idempotencyKey ?? randomUUID(),
-        ),
-      );
-    },
-  });
+    });
+  }
 }
